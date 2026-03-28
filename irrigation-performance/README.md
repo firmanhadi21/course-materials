@@ -6,6 +6,7 @@ Code for the [Understanding Irrigation Performance Analysis](https://firmanhadi2
 
 - `irrigation_performance.py` - Main Python script for measuring irrigation performance using satellite data, weather reanalysis, and crop models
 - `PUPR_IrrigationPerformance_5Oct25.ipynb` - Jupyter notebook for irrigation performance evaluation using Google Earth Engine, MODIS ETa, ERA5-Land, and Sentinel-2/Landsat imagery
+- `data/klambu.gpkg` - GeoPackage containing the Klambu Irrigation Area boundaries (749 tertiary blocks, Central Java)
 
 ## Requirements
 
