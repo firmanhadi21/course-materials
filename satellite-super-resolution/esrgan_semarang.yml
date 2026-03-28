@@ -1,0 +1,147 @@
+# ==========================================================================
+#  ESRGAN (RRDB) — Sentinel-2 → PlanetScope SuperDove 3× Super-Resolution
+#  6-band (spectrally compatible bands only)
+# ==========================================================================
+#
+#  Band Matching:
+#    SuperDove 1 (Coastal Blue, 443nm) ↔ Sentinel-2 B01 (443nm)
+#    SuperDove 2 (Blue, 490nm)         ↔ Sentinel-2 B02 (490nm)
+#    SuperDove 4 (Green, 565nm)        ↔ Sentinel-2 B03 (560nm)
+#    SuperDove 6 (Red, 665nm)          ↔ Sentinel-2 B04 (665nm)
+#    SuperDove 7 (Red Edge, 705nm)     ↔ Sentinel-2 B05 (705nm)
+#    SuperDove 8 (NIR, 865nm)          ↔ Sentinel-2 B8A (865nm)
+#
+#  Excluded (no S2 equivalent):
+#    SuperDove 3 (Green I, 531nm)
+#    SuperDove 5 (Yellow, 610nm)
+#
+#  Usage:
+#    python launch.py -opt esrgan_semarang.yml
+#
+# ==========================================================================
+
+name: ESRGAN_Semarang_6band_x3
+model_type: MultiBandSRModel
+scale: 3
+num_gpu: 1
+manual_seed: 42
+
+# --------------------------------------------------------------------------
+#  Dataset
+# --------------------------------------------------------------------------
+datasets:
+  train:
+    name: Semarang_train_6band
+    type: S2PSBasicSRDataset
+    lr_dir: case-study/patches_semarang_aligned/train/sentinel2
+    hr_dir: case-study/patches_semarang_aligned/train/planetscope
+    file_format: npy
+    scale: 3
+    normalize: true
+    norm_method: percentile
+    augment: true
+    gt_size: 192          # random crop: 192×192 HR → 64×64 LR
+
+    # DataLoader
+    use_shuffle: true
+    num_worker_per_gpu: 4
+    batch_size_per_gpu: 8
+    pin_memory: true
+    persistent_workers: true
+    prefetch_mode: ~
+
+  val:
+    name: Semarang_val_6band
+    type: S2PSBasicSRDataset
+    lr_dir: case-study/patches_semarang_aligned/val/sentinel2
+    hr_dir: case-study/patches_semarang_aligned/val/planetscope
+    file_format: npy
+    scale: 3
+    normalize: true
+    norm_method: percentile
+    augment: false
+    gt_size: 0            # no crop during validation
+
+# --------------------------------------------------------------------------
+#  Paths
+# --------------------------------------------------------------------------
+path:
+  pretrain_network_g: ~
+  strict_load_g: true
+  resume_state: ~
+
+# --------------------------------------------------------------------------
+#  Network  — EDSR backbone with PixelShuffle(3) for native 3× upsampling
+# --------------------------------------------------------------------------
+network_g:
+  type: MultiBandEDSR
+  num_in_ch: 6            # Coastal Blue, Blue, Green, Red, Red Edge, NIR
+  num_out_ch: 6
+  scale: 3
+  num_feat: 64
+  num_block: 16           # EDSR residual blocks
+
+# --------------------------------------------------------------------------
+#  Training
+# --------------------------------------------------------------------------
+train:
+  ema_decay: 0.999
+
+  optim_g:
+    type: Adam
+    lr: !!float 2e-4
+    weight_decay: 0
+    betas: [0.9, 0.99]
+
+  scheduler:
+    type: CosineAnnealingRestartLR
+    periods: [250000, 250000, 250000, 250000]
+    restart_weights: [1, 0.5, 0.5, 0.5]
+    eta_min: !!float 1e-7
+
+  total_iter: 500000
+  warmup_iter: -1         # no warmup
+
+  # --- Losses ---
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+
+  sam_opt:
+    type: SAMLoss
+    loss_weight: 0.1      # spectral fidelity regulariser
+
+# --------------------------------------------------------------------------
+#  Validation
+# --------------------------------------------------------------------------
+val:
+  val_freq: !!float 5e3
+  save_img: false
+
+  metrics:
+    psnr:
+      type: calculate_psnr_per_band
+      crop_border: 0
+    ssim:
+      type: calculate_ssim_per_band
+      crop_border: 0
+    sam:
+      type: calculate_sam
+    ergas:
+      type: calculate_ergas
+      scale: 3
+
+# --------------------------------------------------------------------------
+#  Logging & Checkpointing
+# --------------------------------------------------------------------------
+logger:
+  print_freq: 200
+  save_checkpoint_freq: !!float 5e3
+  use_tb_logger: false
+  wandb:
+    project: ~
+    resume_id: ~
+
+dist_params:
+  backend: nccl

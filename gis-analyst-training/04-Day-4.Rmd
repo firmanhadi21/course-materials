@@ -1,0 +1,102 @@
+# Basis Data Lanjut
+
+**Topik**
+
+
+
+
+## Non-spatial SQL Queries 
+
+1. Membuat tabel baru 
+
+Tujuan : Membuat tabel baru dari tabel yang sudah ada dengan kolom terpilih
+
+```
+CREATE TABLE kelurahan as SELECT geom, giskemen_2, giskemen_4, giskemen18,giskemen19,giskemen20,giskemen21, giskemen27, giskemen28 FROM public.desa_batam
+```
+
+2. Rename column
+
+Tujuan : Mengganti nama kolom tertentu
+
+```
+ALTER TABLE public.kelurahan RENAME COLUMN giskemen_2 TO nama_desa;
+```
+
+3. Mengubah Primary Key
+
+```
+ALTER TABLE desa_batam DROP CONSTRAINT id;
+```
+
+```
+ALTER TABLE desa_batam RENAME COLUMN giskemen_4 TO id;
+```
+
+```
+ALTER TABLE desa_batam ADD PRIMARY KEY (id);
+```
+
+4. Menambah Kolom
+
+```
+ALTER TABLE public.kelurahan ADD COLUMN giskemen33 FROM public.desa WHERE giskemen_4.public.desa.id = giskemen_4.public.kelurahan.id
+```
+
+
+## Spatial SQL Queries
+
+### Adjacent
+
+1. Create New Layer
+
+```
+SELECT * into qlayer FROM kelurahan WHERE st_touches(kelurahan.geometry, ( SELECT geometry FROM kelurahan WHERE nama_desa = 'SADAI'))
+```
+
+2. Create As View
+
+```CREATE VIEW TestView AS  SELECT * FROM kelurahan WHERE st_touches(kelurahan.geom, ( SELECT geom FROM kelurahan WHERE nama_desa = 'SADAI'));```
+
+
+<!-- ## Routing  -->
+
+<!-- 1. Menambahkan ekstensi pgrouting  -->
+
+<!-- ``` -->
+<!-- sudo apt-get install postgresql-10-pgrouting``` -->
+<!-- atau  -->
+<!-- ```sudo apt-get install postgreql-12-pgrouting``` -->
+
+<!-- ```create extension pgrouting();``` -->
+
+<!-- 2. Konversi data OSM ke route -->
+
+<!-- ``` -->
+<!-- import OSM data to pgrouting -->
+<!-- osm2pgrouting -f batam.osm --dbname batam -U postgres -W password -->
+<!-- ``` -->
+## Backup dan Restore
+
+- **Presentasi :** 
+[https://gitpitch.com/firmanhadi/lapan-okt-19/master#/](https://gitpitch.com/firmanhadi/lapan-okt-19/master/)
+
+- **Video Proof of Concept**
+
+  - Backup dengan pgBarman
+    
+  [https://www.dropbox.com/s/tk2g296cc0pv6dh/backup_poc_v1.mkv?dl=0](https://www.dropbox.com/s/tk2g296cc0pv6dh/backup_poc_v1.mkv?dl=0)
+  
+  - Pooling Mechanism
+  
+  [https://www.dropbox.com/s/nl3xa2bnlay6ppk/pooling_mechanism_poc_v1.mkv?dl=0](https://www.dropbox.com/s/nl3xa2bnlay6ppk/pooling_mechanism_poc_v1.mkv?dl=0)
+  
+  [https://www.dropbox.com/s/dtugpqi6k8hcsc3/pooling_mechanism_poc_v2.mkv?dl=0](https://www.dropbox.com/s/dtugpqi6k8hcsc3/pooling_mechanism_poc_v2.mkv?dl=0)
+
+  - Failover Mechanism
+  
+  [https://www.dropbox.com/s/j5f9ks21db18ebv/replication_failover_poc_v1.mkv?dl=0](https://www.dropbox.com/s/j5f9ks21db18ebv/replication_failover_poc_v1.mkv?dl=0)
+  
+- **Software**
+
+  - [https://sqlbackupandftp.com/postgresql-backup](https://sqlbackupandftp.com/postgresql-backup)

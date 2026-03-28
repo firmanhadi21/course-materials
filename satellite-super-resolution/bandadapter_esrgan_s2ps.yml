@@ -1,0 +1,136 @@
+# ==========================================================================
+#  Band-Adapter Transfer Learning — Pretrained ESRGAN → 4-band S2/PS SR
+# ==========================================================================
+#
+#  Strategy:
+#    1. Load pretrained 3-channel ESRGAN weights into the backbone
+#    2. Add learnable 1×1 conv adapters:  4→3 (input) and 3→4 (output)
+#    3. Freeze backbone for first 5 epochs → train only adapters
+#    4. Unfreeze → fine-tune everything end-to-end
+#
+#  This converges much faster than training from scratch when you have
+#  limited satellite training data (<10k patch pairs).
+#
+#  Usage:
+#    python -m basicsr.train -opt options/bandadapter_esrgan_s2ps.yml
+#
+# ==========================================================================
+
+name: BandAdapter_ESRGAN_S2PS_x3
+model_type: SRModel
+scale: 3
+num_gpu: 1
+manual_seed: 42
+
+# --------------------------------------------------------------------------
+#  Dataset
+# --------------------------------------------------------------------------
+datasets:
+  train:
+    name: S2PS_train
+    type: S2PSBasicSRDataset
+    lr_dir: data/patches/train/sentinel2
+    hr_dir: data/patches/train/planetscope
+    file_format: npy
+    scale: 3
+    normalize: true
+    norm_method: percentile
+    augment: true
+    gt_size: 192
+
+    use_shuffle: true
+    num_worker_per_gpu: 6
+    batch_size_per_gpu: 16
+    pin_memory: true
+    persistent_workers: true
+
+  val:
+    name: S2PS_val
+    type: S2PSBasicSRDataset
+    lr_dir: data/patches/val/sentinel2
+    hr_dir: data/patches/val/planetscope
+    file_format: npy
+    scale: 3
+    normalize: true
+    norm_method: percentile
+    augment: false
+    gt_size: 0
+
+# --------------------------------------------------------------------------
+#  Network  — BandAdapter wrapping pretrained RRDB
+# --------------------------------------------------------------------------
+network_g:
+  type: BandAdapterNet
+  num_bands: 4
+  freeze_backbone_epochs: 5   # adapters-only for first 5k iters
+  backbone:
+    type: RRDBNet
+    num_in_ch: 3
+    num_out_ch: 3
+    scale: 3
+    num_feat: 64
+    num_block: 23
+    num_grow_ch: 32
+
+# --------------------------------------------------------------------------
+#  Pretrained
+# --------------------------------------------------------------------------
+path:
+  # Download from: https://github.com/xinntao/Real-ESRGAN/releases
+  pretrain_network_g: pretrained/RealESRGAN_x4plus.pth
+  param_key_str: params_ema
+  strict_load_g: false      # skip adapter layers + scale mismatch
+
+# --------------------------------------------------------------------------
+#  Training
+# --------------------------------------------------------------------------
+train:
+  ema_decay: 0.999
+
+  optim_g:
+    type: Adam
+    lr: !!float 1e-4        # lower LR for fine-tuning
+    weight_decay: 0
+    betas: [0.9, 0.99]
+
+  scheduler:
+    type: CosineAnnealingRestartLR
+    periods: [100000, 100000, 100000]
+    restart_weights: [1, 0.5, 0.5]
+    eta_min: !!float 1e-7
+
+  total_iter: 300000
+
+  pixel_opt:
+    type: L1Loss
+    loss_weight: 1.0
+    reduction: mean
+
+  sam_opt:
+    type: SAMLoss
+    loss_weight: 0.1
+
+# --------------------------------------------------------------------------
+#  Validation
+# --------------------------------------------------------------------------
+val:
+  val_freq: !!float 5e3
+  save_img: true
+
+  metrics:
+    psnr:
+      type: calculate_psnr_per_band
+      crop_border: 0
+    sam:
+      type: calculate_sam
+    ergas:
+      type: calculate_ergas
+      scale: 3
+
+logger:
+  print_freq: 200
+  save_checkpoint_freq: !!float 5e3
+  use_tb_logger: true
+
+dist_params:
+  backend: nccl
