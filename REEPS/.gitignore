@@ -1,0 +1,12 @@
+# Generated outputs (reproduced by running the pipeline)
+Workshop_*.gpkg
+Workshop_*.html
+workshop_synthetic_records.csv
+Workshop_Biodiversity_Database.xlsx
+figures/
+*.csv
+!aoi.gpkg
+
+# Python
+__pycache__/
+*.pyc
